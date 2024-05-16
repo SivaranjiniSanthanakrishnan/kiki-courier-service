@@ -56,6 +56,12 @@ exports.getInput = async () => {
     maxSpeed,
     maxCarriableWeight,
   }).forEach((p) =>
-    console.log(`${p.name} ${p.discount} ${p.totalCost} ${p.time}`)
+    console.log(
+      `${
+        p.error
+          ? "Vehicle weight doesn't fit for any package"
+          : `${p.name} ${p.discount} ${p.totalCost} ${p.time}`
+      } `
+    )
   );
 };

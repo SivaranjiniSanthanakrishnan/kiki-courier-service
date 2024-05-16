@@ -23,14 +23,23 @@ exports.calculateDeliveryTime = (
       ["V1", vehicles["V1"]]
     );
 
-    // Packages to deliver is chosed from the packages for which time has not been updated
-    let packagesToDeliver = packages.filter((p) =>
-      calCarriableWeights(
-        packages.filter((p) => !p.time).map((p) => p.weight),
-        maxCarriableWeight
-      ).includes(p.weight)
+    let carriableWeight = calCarriableWeights(
+      packages.filter((p) => !p.time).map((p) => p.weight),
+      maxCarriableWeight
     );
 
+    // Packages to deliver is chosed from the packages for which time has not been updated
+    let packagesToDeliver = packages.filter((p) => {
+      let index = carriableWeight.findIndex((w) => w === p.weight && !p.time);
+      if (index !== -1) {
+        carriableWeight.splice(index, index + 1);
+        return true;
+      }
+    });
+
+    if (packagesToDeliver.length === 0 && packagesRemaining > 0) {
+      return [{ error: "NO_FIT" }];
+    }
     let maxReturnTime = 0;
     packagesRemaining = packagesRemaining - packagesToDeliver.length;
 

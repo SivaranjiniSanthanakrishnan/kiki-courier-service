@@ -1,71 +1,131 @@
 const { calculateDeliveryTime } = require("./delivery-time");
+const { calCarriableWeights } = require("./carriable-weight");
 
-describe("test module Calculate Delivery Cost", () => {
-  test("calculateDeliveryTime with three packages", () => {
-    let responseTime = [0.07, 0.07, 1.42];
-    let response = calculateDeliveryTime(
-      [
-        {
-          weight: 5,
-          distance: 5,
-        },
-        {
-          weight: 15,
-          distance: 5,
-        },
-        {
-          weight: 10,
-          distance: 100,
-        },
-      ],
-      { noOfVehicles: 2, maxSpeed: 70, maxCarriableWeight: 200 }
-    );
-    expect(
-      response
-        .map(
-          (p, i) =>
-            JSON.stringify(p) ===
-            JSON.stringify({ ...p, time: responseTime[i] })
-        )
-        .filter((p) => !p).length
-    ).toBe(0);
+jest.mock("./carriable-weight");
+
+describe("calculateDeliveryTime Edge Cases", () => {
+  beforeEach(() => {
+    calCarriableWeights.mockClear();
   });
 
-  test("CalculateDeliveryTime with five packages", () => {
-    let responseTime = [3.98, 1.78, 1.42, 0.85, 4.19];
-    let response = calculateDeliveryTime(
-      [
-        {
-          weight: 50,
-          distance: 30,
-        },
-        {
-          weight: 75,
-          distance: 125,
-        },
-        {
-          weight: 175,
-          distance: 100,
-        },
-        {
-          weight: 110,
-          distance: 60,
-        },
-        {
-          weight: 155,
-          distance: 95,
-        },
-      ],
-      { noOfVehicles: 2, maxSpeed: 70, maxCarriableWeight: 200 }
-    );
-    expect(
-      response
-        .map(
-          (p, i) =>
-            JSON.stringify(p) ===
-            JSON.stringify({ ...p, time: responseTime[i] })
-        )
-        .filter((p) => !p).length
-    ).toBe(0);
+  test("Single package exceeding weight limit", () => {
+    const packages = [{ id: "P1", weight: 150, distance: 100, time: 0 }];
+    const config = {
+      noOfVehicles: 1,
+      maxSpeed: 60,
+      maxCarriableWeight: 100,
+    };
+    calCarriableWeights.mockReturnValue([]);
+    const result = calculateDeliveryTime(packages, config);
+    expect(calCarriableWeights).toHaveBeenCalledWith([150], 100);
+    expect(result).toEqual([{ error: "NO_FIT" }]);
+  });
+
+  test("No packages", () => {
+    const packages = [];
+    const config = {
+      noOfVehicles: 2,
+      maxSpeed: 60,
+      maxCarriableWeight: 100,
+    };
+    const result = calculateDeliveryTime(packages, config);
+    expect(result).toEqual([]);
+  });
+
+  test("Single package within weight limit", () => {
+    const packages = [{ id: "P1", weight: 50, distance: 100, time: 0 }];
+    const config = {
+      noOfVehicles: 1,
+      maxSpeed: 60,
+      maxCarriableWeight: 100,
+    };
+    calCarriableWeights.mockReturnValue([50]);
+    const result = calculateDeliveryTime(packages, config);
+    expect(calCarriableWeights).toHaveBeenCalledWith([50], 100);
+    expect(result).toEqual([
+      { id: "P1", weight: 50, distance: 100, time: 1.66 },
+    ]);
+  });
+
+  test("Multiple packages within weight limit", () => {
+    const packages = [
+      { id: "P1", weight: 50, distance: 100, time: 0 },
+      { id: "P2", weight: 50, distance: 200, time: 0 },
+    ];
+    const config = {
+      noOfVehicles: 1,
+      maxSpeed: 60,
+      maxCarriableWeight: 100,
+    };
+    calCarriableWeights.mockReturnValue([50, 50]);
+    const result = calculateDeliveryTime(packages, config);
+    expect(result).toEqual([
+      { id: "P1", weight: 50, distance: 100, time: 1.66 },
+      { id: "P2", weight: 50, distance: 200, time: 3.33 },
+    ]);
+  });
+
+  test("Multiple packages exceeding weight limit", () => {
+    const packages = [
+      { id: "P1", weight: 60, distance: 100, time: 0 },
+      { id: "P2", weight: 70, distance: 200, time: 0 },
+    ];
+    const config = {
+      noOfVehicles: 1,
+      maxSpeed: 60,
+      maxCarriableWeight: 100,
+    };
+    calCarriableWeights.mockReturnValueOnce([70]).mockReturnValueOnce([60]);
+
+    const result = calculateDeliveryTime(packages, config);
+    expect(result).toEqual([
+      { id: "P1", weight: 60, distance: 100, time: 8.32 },
+      { id: "P2", weight: 70, distance: 200, time: 3.33 },
+    ]);
+    expect(calCarriableWeights).toHaveBeenCalledTimes(2);
+    expect(calCarriableWeights).toHaveBeenCalledWith([60, 70], 100);
+    expect(calCarriableWeights).toHaveBeenCalledWith([60], 100);
+  });
+
+  test("Multiple vehicles handling multiple packages", () => {
+    const packages = [
+      { id: "P1", weight: 50, distance: 100, time: 0 },
+      { id: "P2", weight: 50, distance: 200, time: 0 },
+      { id: "P3", weight: 50, distance: 300, time: 0 },
+    ];
+    const config = {
+      noOfVehicles: 2,
+      maxSpeed: 60,
+      maxCarriableWeight: 100,
+    };
+    calCarriableWeights.mockReturnValueOnce([50, 50]).mockReturnValueOnce([50]);
+
+    const result = calculateDeliveryTime(packages, config);
+    expect(result).toEqual([
+      { id: "P1", weight: 50, distance: 100, time: 1.66 },
+      { id: "P2", weight: 50, distance: 200, time: 3.33 },
+      { id: "P3", weight: 50, distance: 300, time: 5.0 },
+    ]);
+    expect(calCarriableWeights).toHaveBeenCalledTimes(2);
+    expect(calCarriableWeights).toHaveBeenCalledWith([50, 50, 50], 100);
+    expect(calCarriableWeights).toHaveBeenCalledWith([50], 100);
+  });
+
+  test("One of the Package weight exceeding max carriable weight", () => {
+    const packages = [
+      { id: "P1", weight: 100, distance: 100, time: 0 },
+      { id: "P2", weight: 150, distance: 200, time: 0 },
+    ];
+    const config = {
+      noOfVehicles: 1,
+      maxSpeed: 60,
+      maxCarriableWeight: 100,
+    };
+    calCarriableWeights.mockReturnValueOnce([100]).mockReturnValueOnce([]);
+    const result = calculateDeliveryTime(packages, config);
+    expect(result).toEqual([{ error: "NO_FIT" }]);
+    expect(calCarriableWeights).toHaveBeenCalledTimes(2);
+    expect(calCarriableWeights).toHaveBeenCalledWith([100, 150], 100);
+    expect(calCarriableWeights).toHaveBeenCalledWith([150], 100);
   });
 });
